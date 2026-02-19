@@ -45,14 +45,16 @@ export default async function LeagueDetailPage({
           <span>{league.is_free ? "Free" : `$${league.buy_in_amount} Buy-in`}</span>
         </div>
 
-        <div className="mt-3">
-          <span className="text-xs text-zinc-400 dark:text-zinc-500">
-            Invite Code
-          </span>
-          <div className="mt-1 inline-block rounded border border-dashed border-zinc-300 bg-zinc-50 px-3 py-1 font-mono text-sm tracking-wider text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
-            {league.invite_code}
+        {currentUserRole === "commissioner" && (
+          <div className="mt-3">
+            <span className="text-xs text-zinc-400 dark:text-zinc-500">
+              Invite Code
+            </span>
+            <div className="mt-1 inline-block rounded border border-dashed border-zinc-300 bg-zinc-50 px-3 py-1 font-mono text-sm tracking-wider text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+              {league.invite_code}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Standings */}
@@ -86,7 +88,7 @@ export default async function LeagueDetailPage({
                 return (
                   <tr
                     key={member.id}
-                    className="bg-white dark:bg-zinc-950"
+                    className="bg-white hover:bg-zinc-50 dark:bg-zinc-950 dark:hover:bg-zinc-900"
                   >
                     <td className="px-4 py-3 text-zinc-500 dark:text-zinc-400">
                       {index + 1}
@@ -100,9 +102,12 @@ export default async function LeagueDetailPage({
                             className="h-6 w-6 rounded-full"
                           />
                         )}
-                        <span className="font-medium text-black dark:text-white">
+                        <Link
+                          href={`/dashboard/${leagueId}/team/${member.id}`}
+                          className="font-medium text-black hover:underline dark:text-white"
+                        >
                           {member.team_name || profile?.display_name || "Unknown"}
-                        </span>
+                        </Link>
                         {member.role === "commissioner" && (
                           <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
                             Commish

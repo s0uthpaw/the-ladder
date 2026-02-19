@@ -182,6 +182,115 @@ export async function getUserLeagues() {
 // ---------------------------------------------------------------------------
 // Get League Detail
 // ---------------------------------------------------------------------------
+// Roster slot display order and labels
+export const ROSTER_SLOTS = [
+  "qb",
+  "rb1",
+  "rb2",
+  "wr_te1",
+  "wr_te2",
+  "wr_te3",
+  "dst",
+  "k",
+  "super_flex",
+] as const;
+
+export const SLOT_LABELS: Record<string, string> = {
+  qb: "QB",
+  rb1: "RB1",
+  rb2: "RB2",
+  wr_te1: "WR/TE1",
+  wr_te2: "WR/TE2",
+  wr_te3: "WR/TE3",
+  dst: "DST",
+  k: "K",
+  super_flex: "Super Flex",
+};
+
+// Playoff round display order and labels
+export const PLAYOFF_ROUNDS = [
+  "wild_card",
+  "divisional",
+  "conference",
+  "super_bowl",
+] as const;
+
+export const ROUND_LABELS: Record<string, string> = {
+  wild_card: "Wild Card",
+  divisional: "Divisional",
+  conference: "Conference",
+  super_bowl: "Super Bowl",
+};
+
+// ---------------------------------------------------------------------------
+// Get Team Detail
+// ---------------------------------------------------------------------------
+export async function getTeamDetail(leagueId: string, memberId: string) {
+  const profile = await syncProfile();
+  if (!profile) return null;
+
+  // Verify the current user is a member of this league
+  const { data: membership } = await supabaseAdmin
+    .from("league_members")
+    .select("role")
+    .eq("league_id", leagueId)
+    .eq("profile_id", profile.id)
+    .single();
+
+  if (!membership) return null;
+
+  // Fetch member, roster, scores, and league name in parallel
+  const [{ data: member }, { data: roster }, { data: scores }, { data: league }] =
+    await Promise.all([
+      supabaseAdmin
+        .from("league_members")
+        .select("id, role, team_name, total_points, draft_order, profiles(id, display_name, avatar_url)")
+        .eq("id", memberId)
+        .eq("league_id", leagueId)
+        .single(),
+      supabaseAdmin
+        .from("roster_players")
+        .select("id, roster_slot, nfl_players(id, name, position, team_id, nfl_teams(abbreviation, full_name, is_eliminated))")
+        .eq("league_member_id", memberId),
+      supabaseAdmin
+        .from("player_game_scores")
+        .select("nfl_player_id, points, nfl_games(round)")
+        .eq("league_id", leagueId),
+      supabaseAdmin
+        .from("leagues")
+        .select("id, name")
+        .eq("id", leagueId)
+        .single(),
+    ]);
+
+  if (!member || !league) return null;
+
+  // Build a set of roster player IDs for filtering scores
+  const rosterPlayerIds = new Set(
+    (roster ?? [])
+      .map((r) => {
+        const player = r.nfl_players as unknown as { id: string } | null;
+        return player?.id;
+      })
+      .filter(Boolean)
+  );
+
+  // Filter scores to only this team's players
+  const teamScores = (scores ?? []).filter((s) =>
+    rosterPlayerIds.has(s.nfl_player_id)
+  );
+
+  return {
+    member,
+    roster: roster ?? [],
+    scores: teamScores,
+    leagueName: league.name,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Get League Detail
+// ---------------------------------------------------------------------------
 export async function getLeagueDetail(leagueId: string) {
   const profile = await syncProfile();
   if (!profile) return null;
