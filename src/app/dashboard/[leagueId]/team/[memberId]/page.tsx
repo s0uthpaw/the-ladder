@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { getTeamDetail } from "@/lib/actions/leagues";
 import {
-  getTeamDetail,
   ROSTER_SLOTS,
   SLOT_LABELS,
   PLAYOFF_ROUNDS,
   ROUND_LABELS,
-} from "@/lib/actions/leagues";
+} from "@/lib/constants/roster";
 
 export default async function TeamDetailPage({
   params,
