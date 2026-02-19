@@ -39,9 +39,10 @@ export default async function DashboardPage() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
           {leagues.map((league) => (
-            <div
+            <Link
               key={league.id}
-              className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900"
+              href={`/dashboard/${league.id}`}
+              className="block rounded-lg border border-zinc-200 bg-white p-5 transition-colors hover:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-600"
             >
               <div className="mb-2 flex items-center gap-2">
                 <h2 className="text-lg font-semibold text-black dark:text-white">
@@ -65,7 +66,7 @@ export default async function DashboardPage() {
                   Code: {league.invite_code}
                 </span>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       )}

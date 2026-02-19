@@ -178,3 +178,46 @@ export async function getUserLeagues() {
     memberCount: countMap[league.id] || 0,
   }));
 }
+
+// ---------------------------------------------------------------------------
+// Get League Detail
+// ---------------------------------------------------------------------------
+export async function getLeagueDetail(leagueId: string) {
+  const profile = await syncProfile();
+  if (!profile) return null;
+
+  // Verify the current user is a member of this league
+  const { data: membership } = await supabaseAdmin
+    .from("league_members")
+    .select("role")
+    .eq("league_id", leagueId)
+    .eq("profile_id", profile.id)
+    .single();
+
+  if (!membership) return null;
+
+  // Fetch league, members (with profiles), and draft in parallel
+  const [{ data: league }, { data: members }, { data: draft }] =
+    await Promise.all([
+      supabaseAdmin.from("leagues").select("*").eq("id", leagueId).single(),
+      supabaseAdmin
+        .from("league_members")
+        .select("id, role, team_name, total_points, draft_order, profiles(id, display_name, avatar_url)")
+        .eq("league_id", leagueId)
+        .order("total_points", { ascending: false }),
+      supabaseAdmin
+        .from("drafts")
+        .select("*")
+        .eq("league_id", leagueId)
+        .single(),
+    ]);
+
+  if (!league) return null;
+
+  return {
+    league,
+    members: members ?? [],
+    draft,
+    currentUserRole: membership.role as "commissioner" | "member",
+  };
+}
