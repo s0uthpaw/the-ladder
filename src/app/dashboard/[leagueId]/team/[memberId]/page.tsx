@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getTeamDetail } from "@/lib/actions/leagues";
+import { EditTeamProfile } from "./components/edit-team-profile";
 import {
   ROSTER_SLOTS,
   SLOT_LABELS,
@@ -18,7 +19,7 @@ export default async function TeamDetailPage({
 
   if (!data) redirect(`/dashboard/${leagueId}`);
 
-  const { member, roster, scores, leagueName } = data;
+  const { member, roster, scores, leagueName, isOwnTeam } = data;
 
   const profile = member.profiles as unknown as {
     id: string;
@@ -43,7 +44,7 @@ export default async function TeamDetailPage({
       nfl_teams: { abbreviation: string; full_name: string; is_eliminated: boolean } | null;
     } | null;
     if (player) {
-      rosterMap.set(r.roster_slot, {
+      rosterMap.set(r.slot, {
         name: player.name,
         abbreviation: player.nfl_teams?.abbreviation ?? "???",
         isEliminated: player.nfl_teams?.is_eliminated ?? false,
@@ -94,7 +95,7 @@ export default async function TeamDetailPage({
               className="h-10 w-10 rounded-full"
             />
           )}
-          <div>
+          <div className="flex-1">
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-bold tracking-tight text-black dark:text-white">
                 {member.team_name || profile?.display_name || "Unknown"}
@@ -105,9 +106,19 @@ export default async function TeamDetailPage({
                 </span>
               )}
             </div>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">
-              {Number(member.total_points)} Total Points
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                {Number(member.total_points)} Total Points
+              </p>
+              {isOwnTeam && (
+                <EditTeamProfile
+                  leagueId={leagueId}
+                  memberId={memberId}
+                  currentTeamName={member.team_name || profile?.display_name || ""}
+                  currentAvatarUrl={profile?.avatar_url ?? null}
+                />
+              )}
+            </div>
           </div>
         </div>
       </div>
