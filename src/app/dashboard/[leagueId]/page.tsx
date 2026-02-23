@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getLeagueDetail } from "@/lib/actions/leagues";
+import { DraftSetup } from "./components/draft-setup";
+import { DraftOrderPanel } from "./components/draft-order-panel";
+import { DeleteLeague } from "./components/delete-league";
 
 export default async function LeagueDetailPage({
   params,
@@ -12,7 +15,9 @@ export default async function LeagueDetailPage({
 
   if (!data) redirect("/dashboard");
 
-  const { league, members, draft, currentUserRole } = data;
+  const { league, members, draft, currentUserRole, sport } = data;
+  const isCommissioner = currentUserRole === "commissioner";
+  const rosterSize = sport === "nba" ? 10 : 9;
 
   return (
     <div>
@@ -30,7 +35,10 @@ export default async function LeagueDetailPage({
           <h1 className="text-2xl font-bold tracking-tight text-black dark:text-white">
             {league.name}
           </h1>
-          {currentUserRole === "commissioner" && (
+          <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+            {league.sport.toUpperCase()}
+          </span>
+          {isCommissioner && (
             <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
               Commissioner
             </span>
@@ -45,7 +53,7 @@ export default async function LeagueDetailPage({
           <span>{league.is_free ? "Free" : `$${league.buy_in_amount} Buy-in`}</span>
         </div>
 
-        {currentUserRole === "commissioner" && (
+        {isCommissioner && (
           <div className="mt-3">
             <span className="text-xs text-zinc-400 dark:text-zinc-500">
               Invite Code
@@ -71,6 +79,9 @@ export default async function LeagueDetailPage({
                 </th>
                 <th className="px-4 py-3 font-medium text-zinc-500 dark:text-zinc-400">
                   Team
+                </th>
+                <th className="px-4 py-3 text-right font-medium text-zinc-500 dark:text-zinc-400">
+                  Active Players
                 </th>
                 <th className="px-4 py-3 text-right font-medium text-zinc-500 dark:text-zinc-400">
                   Points
@@ -115,6 +126,9 @@ export default async function LeagueDetailPage({
                         )}
                       </div>
                     </td>
+                    <td className="px-4 py-3 text-right text-zinc-500 dark:text-zinc-400">
+                      {member.activePlayerCount}/{rosterSize}
+                    </td>
                     <td className="px-4 py-3 text-right font-mono text-zinc-700 dark:text-zinc-300">
                       {Number(member.total_points)}
                     </td>
@@ -126,55 +140,74 @@ export default async function LeagueDetailPage({
         </div>
       </section>
 
-      {/* Draft status */}
+      {/* Draft section */}
       <section className="mb-8">
         <h2 className="mb-4 text-lg font-semibold text-black dark:text-white">
           Draft
         </h2>
-        {draft ? (
-          <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-            <div className="flex items-center gap-2">
-              <span
-                className={`inline-block h-2 w-2 rounded-full ${
-                  draft.status === "completed"
-                    ? "bg-green-500"
-                    : draft.status === "in_progress"
-                      ? "bg-yellow-500"
-                      : "bg-zinc-400"
-                }`}
-              />
-              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                {draft.status === "completed"
-                  ? "Draft Complete"
-                  : draft.status === "in_progress"
-                    ? "Draft In Progress"
-                    : "Pre-Draft"}
-              </span>
-              <span className="text-sm text-zinc-400 dark:text-zinc-500">
-                &middot; {draft.type === "live" ? "Live" : "Async"}
-              </span>
-            </div>
-          </div>
-        ) : (
+
+        {!draft && isCommissioner && <DraftSetup leagueId={leagueId} />}
+
+        {!draft && !isCommissioner && (
           <div className="rounded-lg border border-dashed border-zinc-300 px-6 py-8 text-center dark:border-zinc-700">
             <p className="text-sm text-zinc-500 dark:text-zinc-400">
-              No draft has been set up yet.
+              No draft has been set up yet. The commissioner will set it up.
             </p>
+          </div>
+        )}
+
+        {draft?.status === "pre_draft" && (
+          <DraftOrderPanel
+            leagueId={leagueId}
+            members={members}
+            isCommissioner={isCommissioner}
+          />
+        )}
+
+        {draft?.status === "in_progress" && (
+          <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="inline-block h-2 w-2 rounded-full bg-yellow-500 animate-pulse" />
+              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                Draft In Progress
+              </span>
+            </div>
+            <Link
+              href={`/dashboard/${leagueId}/draft`}
+              className="inline-block rounded-lg bg-black px-5 py-2.5 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+            >
+              Enter Draft Room
+            </Link>
+          </div>
+        )}
+
+        {draft?.status === "completed" && (
+          <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="flex items-center gap-2">
+              <span className="inline-block h-2 w-2 rounded-full bg-green-500" />
+              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                Draft Complete
+              </span>
+            </div>
+            <div className="mt-3">
+              <Link
+                href={`/dashboard/${leagueId}/draft`}
+                className="text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+              >
+                View Draft Results &rarr;
+              </Link>
+            </div>
           </div>
         )}
       </section>
 
-      {/* Commissioner tools (placeholder) */}
-      {currentUserRole === "commissioner" && (
+      {/* Commissioner tools */}
+      {isCommissioner && (
         <section>
           <h2 className="mb-4 text-lg font-semibold text-black dark:text-white">
             Commissioner Tools
           </h2>
-          <div className="rounded-lg border border-dashed border-zinc-300 px-6 py-8 text-center dark:border-zinc-700">
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">
-              League management options will appear here.
-            </p>
-          </div>
+          <DeleteLeague leagueId={leagueId} leagueName={league.name} />
         </section>
       )}
     </div>

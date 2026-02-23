@@ -50,6 +50,43 @@ export default function CreateLeaguePage() {
         </div>
 
         <div>
+          <span className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            Sport
+          </span>
+          <div className="flex gap-4">
+            {[
+              { value: "nfl", label: "NFL" },
+              { value: "nba", label: "NBA" },
+              { value: "mlb", label: "MLB", disabled: true },
+            ].map((sport) => (
+              <label
+                key={sport.value}
+                className={`flex items-center gap-2 text-sm ${
+                  sport.disabled
+                    ? "cursor-not-allowed text-zinc-400 dark:text-zinc-600"
+                    : "cursor-pointer text-zinc-700 dark:text-zinc-300"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="sport"
+                  value={sport.value}
+                  defaultChecked={sport.value === "nfl"}
+                  disabled={sport.disabled}
+                  className="accent-black dark:accent-white"
+                />
+                {sport.label}
+                {sport.disabled && (
+                  <span className="text-xs text-zinc-400 dark:text-zinc-600">
+                    (Coming Soon)
+                  </span>
+                )}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div>
           <label
             htmlFor="season"
             className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"

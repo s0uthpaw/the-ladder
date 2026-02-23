@@ -23,6 +23,8 @@ export async function createLeague(
   if (name.length > 100) return { error: "League name must be 100 characters or less" };
 
   const season = Number(formData.get("season")) || new Date().getFullYear();
+  const sport = (formData.get("sport") as string) || "nfl";
+  if (sport !== "nfl" && sport !== "nba") return { error: "Invalid sport" };
 
   // Generate invite code with retry on collision
   let inviteCode = "";
@@ -45,7 +47,7 @@ export async function createLeague(
     .from("leagues")
     .insert({
       name,
-      sport: "nfl",
+      sport,
       season,
       invite_code: inviteCode,
       created_by: profile.id,
@@ -55,14 +57,15 @@ export async function createLeague(
 
   if (leagueErr) return { error: "Failed to create league" };
 
-  // Insert creator as commissioner + default scoring settings
+  // Insert creator as commissioner + default scoring settings (sport-specific table)
+  const scoringTable = sport === "nba" ? "nba_scoring_settings" : "scoring_settings";
   const [memberResult, scoringResult] = await Promise.all([
     supabaseAdmin.from("league_members").insert({
       league_id: league.id,
       profile_id: profile.id,
       role: "commissioner",
     }),
-    supabaseAdmin.from("scoring_settings").insert({
+    supabaseAdmin.from(scoringTable).insert({
       league_id: league.id,
     }),
   ]);
@@ -232,15 +235,69 @@ export async function getTeamDetail(leagueId: string, memberId: string) {
 
   if (!membership) return null;
 
-  // Fetch member, roster, scores, and league name in parallel
-  const [{ data: member }, { data: roster }, { data: scores }, { data: league }] =
-    await Promise.all([
+  // Fetch member and league in parallel
+  const [{ data: member }, { data: league }] = await Promise.all([
+    supabaseAdmin
+      .from("league_members")
+      .select("id, role, team_name, total_points, draft_order, profiles(id, display_name, avatar_url)")
+      .eq("id", memberId)
+      .eq("league_id", leagueId)
+      .single(),
+    supabaseAdmin
+      .from("leagues")
+      .select("id, name, sport")
+      .eq("id", leagueId)
+      .single(),
+  ]);
+
+  if (!member || !league) return null;
+
+  const sport = league.sport as string;
+  const isNba = sport === "nba";
+
+  // Sport-specific roster + scores
+  let roster: Record<string, unknown>[] = [];
+  let scores: Record<string, unknown>[] = [];
+  let gameDates: string[] = [];
+
+  if (isNba) {
+    const [{ data: nbaRoster }, { data: nbaStats }] = await Promise.all([
       supabaseAdmin
-        .from("league_members")
-        .select("id, role, team_name, total_points, draft_order, profiles(id, display_name, avatar_url)")
-        .eq("id", memberId)
-        .eq("league_id", leagueId)
-        .single(),
+        .from("nba_roster_players")
+        .select("id, slot, nba_players(id, first_name, last_name, name, position, team_id, nba_teams(abbreviation, full_name))")
+        .eq("league_member_id", memberId),
+      supabaseAdmin
+        .from("nba_player_game_stats")
+        .select("player_id, fantasy_points, game_id, nba_games(date)")
+        .order("game_id", { ascending: false }),
+    ]);
+
+    roster = (nbaRoster ?? []) as unknown as Record<string, unknown>[];
+
+    // Get roster player IDs
+    const rosterPlayerIds = new Set(
+      (nbaRoster ?? []).map((r) => {
+        const player = r.nba_players as unknown as { id: number } | null;
+        return player?.id;
+      }).filter(Boolean)
+    );
+
+    // Filter stats to roster players
+    const teamStats = (nbaStats ?? []).filter((s) =>
+      rosterPlayerIds.has(s.player_id)
+    );
+
+    // Extract unique game dates (last 3)
+    const dateSet = new Set<string>();
+    for (const s of teamStats) {
+      const game = s.nba_games as unknown as { date: string } | null;
+      if (game?.date) dateSet.add(game.date);
+    }
+    gameDates = [...dateSet].sort().reverse().slice(0, 3).reverse();
+
+    scores = teamStats as unknown as Record<string, unknown>[];
+  } else {
+    const [{ data: nflRoster }, { data: nflScores }] = await Promise.all([
       supabaseAdmin
         .from("roster_players")
         .select("id, slot, nfl_players(id, name, position, team_id, nfl_teams(abbreviation, full_name, is_eliminated))")
@@ -249,14 +306,11 @@ export async function getTeamDetail(leagueId: string, memberId: string) {
         .from("player_game_scores")
         .select("nfl_player_id, points, nfl_games(round)")
         .eq("league_id", leagueId),
-      supabaseAdmin
-        .from("leagues")
-        .select("id, name")
-        .eq("id", leagueId)
-        .single(),
     ]);
 
-  if (!member || !league) return null;
+    roster = (nflRoster ?? []) as unknown as Record<string, unknown>[];
+    scores = (nflScores ?? []) as unknown as Record<string, unknown>[];
+  }
 
   // Determine standings position
   const { data: allMembers } = await supabaseAdmin
@@ -273,26 +327,30 @@ export async function getTeamDetail(leagueId: string, memberId: string) {
   const memberProfile = member.profiles as unknown as { id: string } | null;
   const isOwnTeam = memberProfile?.id === profile.id;
 
-  // Build a set of roster player IDs for filtering scores
-  const rosterPlayerIds = new Set(
-    (roster ?? [])
-      .map((r) => {
-        const player = r.nfl_players as unknown as { id: string } | null;
-        return player?.id;
-      })
-      .filter(Boolean)
-  );
+  if (!isNba) {
+    // NFL: filter scores to roster players
+    const rosterPlayerIds = new Set(
+      (roster ?? [])
+        .map((r) => {
+          const player = (r as Record<string, unknown>).nfl_players as unknown as { id: string } | null;
+          return player?.id;
+        })
+        .filter(Boolean)
+    );
 
-  // Filter scores to only this team's players
-  const teamScores = (scores ?? []).filter((s) =>
-    rosterPlayerIds.has(s.nfl_player_id)
-  );
+    scores = (scores ?? []).filter((s) =>
+      rosterPlayerIds.has((s as Record<string, unknown>).nfl_player_id as string)
+    );
+  }
 
   return {
     member,
     roster: roster ?? [],
-    scores: teamScores,
+    scores,
     leagueName: league.name,
+    leagueId: league.id,
+    sport,
+    gameDates,
     isOwnTeam,
     memberProfileId: memberProfile?.id ?? null,
     standingsPosition,
@@ -335,10 +393,11 @@ export async function getLeagueDetail(leagueId: string) {
 
   if (!league) return null;
 
-  // Fetch roster player counts per member
+  // Fetch roster player counts per member (sport-specific table)
   const memberIds = (members ?? []).map((m) => m.id);
+  const rosterTable = league.sport === "nba" ? "nba_roster_players" : "roster_players";
   const { data: rosterEntries } = await supabaseAdmin
-    .from("roster_players")
+    .from(rosterTable)
     .select("league_member_id")
     .in("league_member_id", memberIds);
 
@@ -355,6 +414,7 @@ export async function getLeagueDetail(leagueId: string) {
     })),
     draft,
     currentUserRole: membership.role as "commissioner" | "member",
+    sport: league.sport as string,
   };
 }
 
