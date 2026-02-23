@@ -258,6 +258,17 @@ export async function getTeamDetail(leagueId: string, memberId: string) {
 
   if (!member || !league) return null;
 
+  // Determine standings position
+  const { data: allMembers } = await supabaseAdmin
+    .from("league_members")
+    .select("id, total_points")
+    .eq("league_id", leagueId)
+    .order("total_points", { ascending: false });
+
+  const standingsPosition =
+    (allMembers ?? []).findIndex((m) => m.id === memberId) + 1 || null;
+  const totalTeams = allMembers?.length ?? 0;
+
   // Determine if this is the current user's own team
   const memberProfile = member.profiles as unknown as { id: string } | null;
   const isOwnTeam = memberProfile?.id === profile.id;
@@ -284,6 +295,8 @@ export async function getTeamDetail(leagueId: string, memberId: string) {
     leagueName: league.name,
     isOwnTeam,
     memberProfileId: memberProfile?.id ?? null,
+    standingsPosition,
+    totalTeams,
   };
 }
 

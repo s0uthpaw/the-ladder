@@ -19,7 +19,7 @@ export default async function TeamDetailPage({
 
   if (!data) redirect(`/dashboard/${leagueId}`);
 
-  const { member, roster, scores, leagueName, isOwnTeam } = data;
+  const { member, roster, scores, leagueName, isOwnTeam, standingsPosition, totalTeams } = data;
 
   const profile = member.profiles as unknown as {
     id: string;
@@ -120,6 +120,19 @@ export default async function TeamDetailPage({
               )}
             </div>
           </div>
+          {standingsPosition && (
+            <div className="text-right">
+              <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                Standing:
+              </p>
+              <p className="text-[2rem] font-bold leading-tight tracking-tight text-black dark:text-white">
+                {standingsPosition}
+                <span className="text-base font-medium text-zinc-400 dark:text-zinc-500">
+                  /{totalTeams}
+                </span>
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
